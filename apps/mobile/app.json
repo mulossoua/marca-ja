@@ -1,0 +1,24 @@
+{
+  "expo": {
+    "name": "Marca Já",
+    "slug": "marca-ja",
+    "scheme": "marcaja",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.marcaja.app"
+    },
+    "android": {
+      "package": "com.marcaja.app"
+    },
+    "web": { "bundler": "metro" },
+    "extra": {
+      "eas": {
+        "projectId": "COLOQUE_AQUI_O_ID_GERADO_POR_EAS_BUILD_CONFIGURE"
+      }
+    }
+  }
+}

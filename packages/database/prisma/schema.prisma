@@ -1,0 +1,471 @@
+// Schema multi-tenant: Business é o tenant raiz. Branch permite múltiplas filiais.
+// Toda entidade operacional pendura de Branch (não apenas Business) para já suportar
+// multi-filial desde a Fase C, evitando migração futura.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../generated/client"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------- ENUMS ----------
+
+enum PlatformRole {
+  PLATFORM_ADMIN
+  BUSINESS_MANAGER
+  PROFESSIONAL
+  CUSTOMER
+}
+
+enum BusinessCategory {
+  BARBERSHOP
+  BEAUTY_SALON
+}
+
+enum AppointmentStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  RESCHEDULED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  NO_SHOW
+}
+
+enum PaymentStatus {
+  NOT_REQUIRED
+  PENDING
+  PARTIAL
+  PAID
+  REFUNDED
+  FAILED
+}
+
+enum PaymentMethod {
+  PAY_AT_BUSINESS
+  ONLINE
+  WALLET
+  VOUCHER
+}
+
+enum NotificationChannel {
+  PUSH
+  EMAIL
+  SMS
+  WHATSAPP
+}
+
+enum NotificationType {
+  APPOINTMENT_CONFIRMED
+  APPOINTMENT_REMINDER
+  APPOINTMENT_CANCELLED
+  APPOINTMENT_RESCHEDULED
+  APPOINTMENT_STARTING_SOON
+}
+
+enum DiscountType {
+  PERCENTAGE
+  FIXED
+}
+
+// ---------- IDENTIDADE ----------
+
+model User {
+  id           String       @id @default(uuid())
+  email        String?      @unique
+  phone        String?      @unique
+  passwordHash String
+  platformRole PlatformRole @default(CUSTOMER)
+  isActive     Boolean      @default(true)
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  customerProfile CustomerProfile?
+  memberships     BusinessMember[]
+  professional    Professional?
+  auditLogs       AuditLog[]
+  refreshTokens   RefreshToken[]
+
+  @@index([email])
+  @@index([phone])
+}
+
+model RefreshToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String   @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+}
+
+model CustomerProfile {
+  id          String   @id @default(uuid())
+  userId      String   @unique
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fullName    String
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  appointments Appointment[]
+  reviews      Review[]
+  favourites   Favourite[]
+}
+
+// Ligação N:N entre User e Business com papel dentro do tenant
+// (BUSINESS_MANAGER). Permite um utilizador gerir mais de um negócio no futuro.
+model BusinessMember {
+  id         String   @id @default(uuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([userId, businessId])
+  @@index([businessId])
+}
+
+// ---------- TENANT: BUSINESS / BRANCH ----------
+
+model Business {
+  id          String           @id @default(uuid())
+  name        String
+  slug        String           @unique
+  category    BusinessCategory
+  description String?
+  logoUrl     String?
+  coverUrl    String?
+  isActive    Boolean          @default(true)
+  planCode    String           @default("starter")
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+
+  members     BusinessMember[]
+  branches    Branch[]
+  auditLogs   AuditLog[]
+
+  @@index([slug])
+}
+
+model Branch {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  name       String
+  city       String
+  address    String
+  latitude   Float?
+  longitude  Float?
+  phone      String?
+  timezone   String   @default("Africa/Maputo")
+  currency   String   @default("MZN")
+  isActive   Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  professionals    Professional[]
+  services         Service[]
+  serviceCategories ServiceCategory[]
+  businessHours    BusinessHours[]
+  appointments     Appointment[]
+  promotions       Promotion[]
+  coupons          Coupon[]
+
+  @@unique([businessId, name])
+  @@index([businessId])
+  @@index([city])
+}
+
+// Horário de funcionamento por dia da semana (0=Domingo .. 6=Sábado)
+model BusinessHours {
+  id        String @id @default(uuid())
+  branchId  String
+  branch    Branch @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  weekday   Int
+  opensAt   String // "09:00"
+  closesAt  String // "18:00"
+  isClosed  Boolean @default(false)
+
+  @@unique([branchId, weekday])
+  @@index([branchId])
+}
+
+// ---------- PROFISSIONAIS ----------
+
+model Professional {
+  id           String   @id @default(uuid())
+  userId       String?  @unique
+  user         User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  fullName     String
+  specialty    String?
+  bio          String?
+  avatarUrl    String?
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  services       ProfessionalService[]
+  availability   ProfessionalAvailability[]
+  timeBlocks     TimeBlock[]
+  appointments   Appointment[]
+  reviews        Review[]
+
+  @@index([branchId])
+}
+
+// Disponibilidade semanal recorrente do profissional
+model ProfessionalAvailability {
+  id             String       @id @default(uuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  weekday        Int
+  startTime      String // "09:00"
+  endTime        String // "13:00"
+
+  @@index([professionalId])
+}
+
+// Bloqueios pontuais: folgas, férias, pausas, reuniões
+model TimeBlock {
+  id             String       @id @default(uuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  startsAt       DateTime
+  endsAt         DateTime
+  reason         String?
+  createdAt      DateTime     @default(now())
+
+  @@index([professionalId, startsAt, endsAt])
+}
+
+// ---------- SERVIÇOS ----------
+
+model ServiceCategory {
+  id       String  @id @default(uuid())
+  branchId String
+  branch   Branch  @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  name     String
+  services Service[]
+
+  @@unique([branchId, name])
+  @@index([branchId])
+}
+
+model Service {
+  id           String          @id @default(uuid())
+  branchId     String
+  branch       Branch          @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  categoryId   String?
+  category     ServiceCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  name         String
+  description  String?
+  durationMin  Int
+  priceCents   Int
+  currency     String          @default("MZN")
+  imageUrl     String?
+  isActive     Boolean         @default(true)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  professionals ProfessionalService[]
+  appointments  Appointment[]
+  promotions    PromotionService[]
+
+  @@index([branchId])
+}
+
+// N:N Professional <-> Service (quais serviços cada profissional executa)
+model ProfessionalService {
+  id             String       @id @default(uuid())
+  professionalId String
+  professional   Professional @relation(fields: [professionalId], references: [id], onDelete: Cascade)
+  serviceId      String
+  service        Service      @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([professionalId, serviceId])
+  @@index([serviceId])
+}
+
+// ---------- MARCAÇÕES ----------
+
+model Appointment {
+  id              String             @id @default(uuid())
+  branchId        String
+  branch          Branch             @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  customerId      String
+  customer        CustomerProfile    @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  professionalId  String
+  professional    Professional       @relation(fields: [professionalId], references: [id], onDelete: Restrict)
+  serviceId       String
+  service         Service            @relation(fields: [serviceId], references: [id], onDelete: Restrict)
+  startsAt        DateTime
+  endsAt          DateTime
+  status          AppointmentStatus  @default(PENDING)
+  priceCents      Int
+  currency        String             @default("MZN")
+  notes           String?
+  cancelledAt     DateTime?
+  cancelReason     String?
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
+
+  statusHistory   AppointmentStatusHistory[]
+  payment         Payment?
+  review          Review?
+  couponId        String?
+  coupon          Coupon?            @relation(fields: [couponId], references: [id], onDelete: SetNull)
+
+  // Impede duas marcações activas para o mesmo profissional no mesmo intervalo
+  // (verificação definitiva é feita em transacção no service, isto é defesa em profundidade).
+  @@index([branchId, startsAt])
+  @@index([professionalId, startsAt, endsAt])
+  @@index([customerId])
+}
+
+model AppointmentStatusHistory {
+  id            String             @id @default(uuid())
+  appointmentId String
+  appointment   Appointment        @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  fromStatus    AppointmentStatus?
+  toStatus      AppointmentStatus
+  changedByUserId String?
+  createdAt     DateTime           @default(now())
+
+  @@index([appointmentId])
+}
+
+// ---------- PAGAMENTOS (camada desacoplada) ----------
+
+model Payment {
+  id            String        @id @default(uuid())
+  appointmentId String        @unique
+  appointment   Appointment   @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  method        PaymentMethod @default(PAY_AT_BUSINESS)
+  status        PaymentStatus @default(NOT_REQUIRED)
+  amountCents   Int
+  currency      String        @default("MZN")
+  providerRef   String?
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+}
+
+// ---------- NOTIFICAÇÕES ----------
+
+model Notification {
+  id            String              @id @default(uuid())
+  userId        String
+  type          NotificationType
+  channel       NotificationChannel
+  title         String
+  body          String
+  appointmentId String? // referência opcional, usada para evitar lembretes duplicados
+  readAt        DateTime?
+  sentAt        DateTime?
+  createdAt     DateTime            @default(now())
+
+  @@index([userId])
+  @@index([appointmentId])
+}
+
+// ---------- AVALIAÇÕES / FAVORITOS ----------
+
+model Review {
+  id             String           @id @default(uuid())
+  appointmentId  String           @unique
+  appointment    Appointment      @relation(fields: [appointmentId], references: [id], onDelete: Cascade)
+  customerId     String
+  customer       CustomerProfile  @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  professionalId String?
+  professional   Professional?    @relation(fields: [professionalId], references: [id], onDelete: SetNull)
+  rating         Int
+  comment        String?
+  createdAt      DateTime         @default(now())
+
+  @@index([professionalId])
+}
+
+model Favourite {
+  id         String          @id @default(uuid())
+  customerId String
+  customer   CustomerProfile @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  targetType String // "BUSINESS" | "BRANCH" | "PROFESSIONAL" | "SERVICE"
+  targetId   String
+  createdAt  DateTime        @default(now())
+
+  @@unique([customerId, targetType, targetId])
+}
+
+// ---------- PROMOÇÕES / CUPÕES ----------
+
+model Promotion {
+  id           String   @id @default(uuid())
+  branchId     String
+  branch       Branch   @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  title        String
+  discountType DiscountType
+  discountValue Int
+  startsAt     DateTime
+  endsAt       DateTime
+  isActive     Boolean  @default(true)
+
+  services PromotionService[]
+
+  @@index([branchId])
+}
+
+model PromotionService {
+  id          String    @id @default(uuid())
+  promotionId String
+  promotion   Promotion @relation(fields: [promotionId], references: [id], onDelete: Cascade)
+  serviceId   String
+  service     Service   @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@unique([promotionId, serviceId])
+}
+
+model Coupon {
+  id            String       @id @default(uuid())
+  branchId      String
+  branch        Branch       @relation(fields: [branchId], references: [id], onDelete: Cascade)
+  code          String
+  discountType  DiscountType
+  discountValue Int
+  maxRedemptions Int?
+  redemptions   Int          @default(0)
+  expiresAt     DateTime?
+  isActive      Boolean      @default(true)
+
+  appointments Appointment[]
+
+  @@unique([branchId, code])
+}
+
+// ---------- AUDITORIA ----------
+
+model AuditLog {
+  id         String   @id @default(uuid())
+  businessId String?
+  business   Business? @relation(fields: [businessId], references: [id], onDelete: SetNull)
+  userId     String?
+  user       User?     @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action     String   // ex: "SERVICE_PRICE_UPDATED"
+  entityType String
+  entityId   String
+  metadata   Json?
+  createdAt  DateTime @default(now())
+
+  @@index([businessId])
+  @@index([entityType, entityId])
+}

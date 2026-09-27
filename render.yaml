@@ -1,0 +1,32 @@
+# Deploy num clique no Render (render.com): "New +" → "Blueprint" → aponte para
+# este repositório. Cria automaticamente a API e a base de dados Postgres ligadas.
+databases:
+  - name: marca-ja-db
+    plan: free
+    databaseName: agendamento
+    user: agendamento
+
+services:
+  - type: web
+    name: marca-ja-api
+    runtime: docker
+    dockerfilePath: ./apps/api/Dockerfile
+    dockerContext: .
+    plan: free
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: marca-ja-db
+          property: connectionString
+      - key: JWT_ACCESS_SECRET
+        generateValue: true
+      - key: JWT_REFRESH_SECRET
+        generateValue: true
+      - key: ACCESS_TOKEN_TTL
+        value: "15m"
+      - key: REFRESH_TOKEN_TTL_DAYS
+        value: "30"
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: "3000"

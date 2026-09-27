@@ -1,0 +1,16 @@
+{
+  "name": "app-agendamento",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev:api": "npm run dev --workspace=apps/api",
+    "build:api": "npm run build --workspace=apps/api",
+    "test:api": "npm run test --workspace=apps/api",
+    "prisma:generate": "npm run generate --workspace=packages/database",
+    "prisma:migrate": "npm run migrate --workspace=packages/database",
+    "prisma:seed": "npm run seed --workspace=packages/database"
+  }
+}
