@@ -1,11 +1,15 @@
-# Deploy num clique no Render (render.com): "New +" → "Blueprint" → aponte para
-# este repositório. Cria automaticamente a API e a base de dados Postgres ligadas.
-databases:
-  - name: marca-ja-db
-    plan: free
-    databaseName: agendamento
-    user: agendamento
-
+# Deploy no Render (render.com): "New +" → "Blueprint" → aponte para este
+# repositório. Cria a API automaticamente; a base de dados é o Neon (neon.tech,
+# grátis para sempre, sem expirar) — não a Postgres do próprio Render, que
+# expira aos 30 dias no plano gratuito.
+#
+# Antes de aplicar este blueprint:
+#   1. Crie um projecto grátis em https://neon.tech
+#   2. Copie a "connection string" que o Neon fornece
+#   3. Depois do Render criar o serviço "marca-ja-api", vá a
+#      Environment → adicione DATABASE_URL manualmente com essa connection
+#      string (o Render pede isto porque a variável está marcada "sync: false"
+#      abaixo — não pode vir dele, vem de fora).
 services:
   - type: web
     name: marca-ja-api
@@ -15,9 +19,7 @@ services:
     plan: free
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: marca-ja-db
-          property: connectionString
+        sync: false
       - key: JWT_ACCESS_SECRET
         generateValue: true
       - key: JWT_REFRESH_SECRET
@@ -30,3 +32,5 @@ services:
         value: production
       - key: PORT
         value: "3000"
+      - key: CORS_ALLOWED_ORIGINS
+        value: "http://localhost:5173"

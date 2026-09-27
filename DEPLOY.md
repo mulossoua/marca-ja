@@ -7,23 +7,37 @@ nada disto pode ser feito por mim, porque exige credenciais suas.
 
 ## 1. Publicar a API (fazer isto PRIMEIRO — o mobile precisa da URL)
 
-Recomendado: **Render** (tem plano gratuito, mais simples para começar).
+Stack 100% grátis e sem expirar: **base de dados no Neon** (a Postgres do
+próprio Render expira aos 30 dias no plano gratuito) + **API no Render**.
 
-1. Crie conta em https://render.com
-2. Suba este repositório para o GitHub (posso ajudar com isso — `git init` +
-   `git push` — só preciso da sua autorização e do link do repositório vazio).
+### 1a. Base de dados (Neon)
+
+1. Crie conta grátis em https://neon.tech (pode entrar com GitHub)
+2. **New Project** → dê um nome (ex.: `marca-ja`)
+3. O Neon mostra logo uma **connection string** (`postgresql://...`) — copie-a,
+   vai precisar dela no passo seguinte. Já vem com `?sslmode=require`, que o
+   Prisma aceita sem alterações.
+
+### 1b. API (Render)
+
+1. Crie conta em https://render.com (grátis, sem cartão)
+2. O repositório já está no GitHub: `mulossoua/marca-ja`
 3. No Render: **New +** → **Blueprint** → escolha o repositório. O ficheiro
-   `render.yaml` já está pronto na raiz e cria a API + a base de dados Postgres
-   automaticamente, com os segredos gerados sozinhos.
-4. Depois de publicado, o Render dá-lhe um URL do tipo
+   `render.yaml` já está pronto na raiz e cria o serviço `marca-ja-api`
+   automaticamente, com `JWT_ACCESS_SECRET`/`JWT_REFRESH_SECRET` gerados sozinhos.
+4. **Antes de aplicar** (ou logo a seguir), em **Environment**, adicione
+   manualmente a variável `DATABASE_URL` com a connection string do Neon do
+   passo 1a — o blueprint deixa-a marcada para preenchimento manual de propósito.
+5. Depois de publicado, o Render dá-lhe um URL do tipo
    `https://marca-ja-api.onrender.com` — é esse URL que vai usar em todo o resto
    deste guia como `<API_URL>`.
-5. Corra o seed de demonstração contra a BD de produção (opcional, só para
-   testar): no shell do Render, ou localmente apontando `DATABASE_URL` para lá,
-   `npm run --workspace=packages/database seed`.
+6. Corra o seed de demonstração contra a BD de produção (opcional, só para
+   testar): localmente, apontando `DATABASE_URL` para a connection string do
+   Neon, `npm run --workspace=packages/database seed`.
 
-**Alternativas equivalentes**: Railway (railway.app), Fly.io (fly.io) — todos
-aceitam o mesmo `apps/api/Dockerfile` sem alterações.
+**Nota sobre o plano gratuito do Render**: a API "adormece" ao fim de 15 min
+sem pedidos e demora ~1 min a responder na chamada seguinte. A base de dados
+no Neon nunca expira nem é apagada — só a API tem esta latência inicial.
 
 ---
 
